@@ -13,7 +13,7 @@ function createElement(type, props, ...children) {
 }
 
 // children이 *원시값일 때 처리하는 wrap 함수
-// *원시값: 기본 타입, string, number, boolean 등등..
+// *원시값: 기본 타입 string, number, boolean 등등..
 function createTextElement(text) {
     return {
         type: "TEXT_ELEMENT",
@@ -260,4 +260,17 @@ function render(element, container) {
     };
 
     nextUnitOfWork = wipRoot;
+}
+
+function reconciliationChildren(wipFiber, elements) {
+    let index = 0;
+    let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
+    let prevSibling = null;
+
+    while (index < elements.length || oldFiber != null) {
+        const element = elements[index];
+        let newFiber = null;
+
+        const sameType = oldFiber && element && element.type == oldFiber.type;
+    }
 }
