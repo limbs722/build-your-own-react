@@ -87,8 +87,27 @@ function workLoop(deadline) {
 
 requestIdleCallback(workLoop);
 
-function performUnitOfWork(nextUnitOfWork) {
-    // todo
+function performUnitOfWork(fiber) {
+    const isFunctionComponent = fiber.type instanceof Fuction;
+
+    if (isFunctionComponent) {
+        updateFunctionComponent(fiber);
+    } else {
+        updateHostComponent(fiber);
+    }
+
+    if (fiber.child) {
+        return fiber.child;
+    }
+
+    let nextFiber = fiber;
+
+    while (nextFiber) {
+        if (nextFiber.sibling) {
+            return newFiber.sibling;
+        }
+        nextFiber = nextFiber.parent;
+    }
 }
 
 // 4. fibers
@@ -231,7 +250,9 @@ function workLoop(deadline) {
 
 // 모든 작업이 끝나고 나면(더이상 다음 작업이 없을 때), 전체 fiber tree 를 DOM에 commit 한다.
 function commitRoot() {
+    deletions.forEach(commitWork);
     commitWork(wipRoot.child);
+    currentRoot = wipRoot;
     wipRoot = null;
 }
 
@@ -240,8 +261,21 @@ function commitWork(fiber) {
         return;
     }
 
+    let domParentFiber = fiber.parent;
+    while (!domParentFiber.dom) {
+        domParentFiber = domParentFiber.parent;
+    }
+
     const domParent = fiber.parent.dom;
-    domParent.appendChild(fiber.dom);
+
+    if (fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
+        domParent.appendChild(fiber.dom);
+    } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
+        updateDom(fiber.dom, fiber.alternate.props, fiber.props);
+    } else if (fiber.effectTag === "DELETION") {
+        daomParent.removeChild(fiber.dom);
+    }
+
     commitWork(fiber.child);
     commitWork(fiber.sibling);
 }
@@ -272,5 +306,156 @@ function reconciliationChildren(wipFiber, elements) {
         let newFiber = null;
 
         const sameType = oldFiber && element && element.type == oldFiber.type;
+
+        if (sameType) {
+            newFiber = {
+                type: oldFiber.type,
+                props: element.props,
+                dom: oldFiber.dom,
+                parent: wipFiber,
+                alternate: oldFiber,
+                effectTag: "UPDATE",
+            };
+        }
+        if (element && !sameType) {
+            newFiber = {
+                type: element.type,
+                props: element.props,
+                dom: null,
+                parent: wipFiber,
+                alternate: null,
+                effectTag: "PLACEMENT",
+            };
+        }
+        if (oldFiber && !sameType) {
+            oldFiber.effectTag = "DELETION";
+            deletions.push(oldFiber);
+        }
+
+        if (oldFiber) {
+            oldFiber = oldFiber.sibling;
+        }
+
+        if (index == 0) {
+            fiber.child = newFiber;
+        } else {
+            prevSibling.sibling = newFiber;
+        }
+
+        prevSibling = newFiber;
+        index++;
     }
+}
+
+const isEvent = (key) => key.startsWith("on");
+const isProperty = (key) => key !== "children" && !isEvent(key);
+const isNew = (prev, next) => (key) => prev[key] !== next[key];
+const isGone = (prev, next) => (key) => !(key in next);
+
+function updateDom(dom, prevProps, nextProps) {
+    // remove old or changed event listerers
+    Object.keys(prevProps)
+        .filter(isEvent)
+        .filter((key) => {
+            !(key in nextProps) || isNew(prevProps, nextProps)(key);
+        })
+        .forEach((name) => {
+            const eventType = name.toLowerCase().substring(2);
+            dom.removeEventListner(eventType, prevProps[name]);
+        });
+
+    // remove old properties
+    Object.keys(prevProps)
+        .filter(isProperty)
+        .filter(isGone(prevProps, nextProps))
+        .forEach((name) => {
+            dom[name] = "";
+        });
+
+    // add new properties
+    Object.keys(nextProps)
+        .filter(isProperty)
+        .filter(isNew(prevProps, nextProps))
+        .forEach((name) => {
+            dom[name] = nextprops[name];
+        });
+
+    // add new event listeners
+    Object.keys(prevProps)
+        .filter(isEvent)
+        .filter(isNew(prevProps, nextProps))
+        .forEach((name) => {
+            const eventType = name.toLowerCase().substring(2);
+            dom.addEventListener(eventType, prevProps[name]);
+        });
+}
+
+// 7. function components
+// => 함수형 컴포넌트의 차이점 :
+//      1. fiber가 dom node를 갖지 않는다.
+//      2. children props 에서 가져오는 것이 아니라 함수에서 바로 가져 온다.
+// fiber의 타입을 체크해서 함수라면 다른 update 함수를 사용하도록 한다.
+// updateHostComponent는 기존 함수와 같고, updateFunctionComponent는 함수로 자식을 가져오도록 할 것.
+let wipFiber = null; // useState에 필요한 전역번수
+let hookIndex = null; // uesState가 한 컴포넌트에서 여러번 호출되었을 때를 위한 hooks 배열
+
+function updateFunctionComponent(fiber) {
+    wipFiber = fiber;
+    hookIndex = 0;
+    wipFiber.hooks = [];
+
+    const children = [fiber.type(fiber.props)];
+    reconciliationChildren(fiber, children);
+}
+
+function updateHostComponent(fiber) {
+    if (!fiber.dom) {
+        fiber.dom = createDom(fiber);
+    }
+    reconciliationChildren(fiber, fiber.props.children);
+}
+
+function commitDeletion(fiber, domParent) {
+    if (fiber.dom) {
+        domParent.removeChild(fiber.dom);
+    } else {
+        commitDeletion(fiber.child, domParent);
+    }
+}
+
+// 8. hooks
+// useState가 호출되면, 이전에 호출된 hook이 있다면 이전 hook에서 state를 복사해 온다.
+// 새로운 hook을 fiber에 넣어주고 state를 반환한다.
+// useState는 상태를 변환시키기 위한 함수를 반환해야한다. 그래서 setState를 선언해 action을 받도록 선언해야하고,
+// 이 action을 hook의 Queue에 삽입한다.
+// 그 다음의 실행단위들을 차근차근 실행 시키도록 한다.
+// 이 action 들은 다음 렌더링을 할 때 old hook에 쌓여있던 action들이 실행되며 실행된다.
+function useState(initial) {
+    const oldHook =
+        webFiber.alternate &&
+        webFiber.alternate.hooks &&
+        webFiber.alternate.hooks[hookIndex];
+
+    const hook = { status: oldHook ? oldHook.state : initial, queue: [] };
+
+    const action = oldHook ? oldHook.queue : [];
+    action.forEach((action) => {
+        hook.state = action(hook.state);
+    });
+
+    const setState = (action) => {
+        hook.queue.pupsh(action);
+
+        wipRoot = {
+            dom: currentRoot.dom,
+            props: currentRoot.props,
+            alternate: currentRoot,
+        };
+        (nextUnitOfWork = wipRoot), (deletions = []);
+    };
+
+    wipFiber.hooks.push(hook);
+    hookIndex++;
+
+    return [hook.state, setState];
 }
