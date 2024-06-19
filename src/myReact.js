@@ -130,6 +130,7 @@ let deletions = null;
 
 function workLoop(deadline) {
     let shouldYield = false;
+
     while (nextUnitOfWork && !shouldYield) {
         nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
         shouldYield = deadline.timeRemaining() < 1;
@@ -186,7 +187,7 @@ function useState(initial) {
 
     const actions = oldHook ? oldHook.queue : [];
     actions.forEach((action) => {
-        hook.state = action(hook.state);
+        hook.state = typeof action === "function" ? action(hook.state) : action;
     });
 
     const setState = (action) => {
@@ -263,10 +264,65 @@ function reconcileChildren(wipFiber, elements) {
     }
 }
 
+function memo(Component, arePropsEqual) {
+    function memoizedComponent(props) {
+        const prevProps = Component.prevProps || {};
+        const propsChanged = arePropsEqual
+            ? !arePropsEqual(prevProps, props)
+            : !shallowEqual(prevProps, props);
+
+        if (!propsChanged) {
+            return Component.memoizedElement;
+        }
+
+        Component.prevProps = props;
+        const element = Component(props);
+        Component.memoizedElement = element;
+
+        return element;
+    }
+
+    return memoizedComponent;
+}
+
+function shallowEqual(objA, objB) {
+    if (Object.is(objA, objB)) {
+        return true;
+    }
+
+    if (
+        typeof objA !== "object" ||
+        objA === null ||
+        typeof objB !== "object" ||
+        objB === null
+    ) {
+        return false;
+    }
+
+    const keysA = Object.keys(objA);
+    const keysB = Object.keys(objB);
+
+    if (keysA.length !== keysB.length) {
+        return false;
+    }
+
+    for (let i = 0; i < keysA.length; i++) {
+        if (
+            !Object.prototype.hasOwnProperty.call(objB, keysA[i]) ||
+            !Object.is(objA[keysA[i]], objB[keysA[i]])
+        ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 const myReact = {
     createElement,
     render,
     useState,
+    memo,
 };
 
 export default myReact;
