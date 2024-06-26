@@ -164,7 +164,7 @@ function performUnitOfWork(fiber) {
     }
 }
 
-let wipFiber = null;
+let wipFiber = null; // work in progress
 let hookIndex = null;
 
 function updateFunctionComponent(fiber) {
@@ -264,22 +264,27 @@ function reconcileChildren(wipFiber, elements) {
     }
 }
 
+// const Card = memo(() => {
+//     return <div></div>
+// })
+
+// <div>
+//     <Card x={1} />
+//     <Card x={2}/>
+// </div>
 function memo(Component, arePropsEqual) {
+    // 동일한 props가 전달될 경우 렌더링 하지 않고 건너뜀
+    // <Card />
     function memoizedComponent(props) {
-        const prevProps = Component.prevProps || {};
-        const propsChanged = arePropsEqual
-            ? !arePropsEqual(prevProps, props)
-            : !shallowEqual(prevProps, props);
-
-        if (!propsChanged) {
-            return Component.memoizedElement;
+        const oldProps = wipFiber.alternate && wipFiber.alternate.props;
+        if (
+            oldProps && arePropsEqual
+                ? arePropsEqual(oldProps, props)
+                : shallowEqual(oldProps, props)
+        ) {
+            return oldProps.child;
         }
-
-        Component.prevProps = props;
-        const element = Component(props);
-        Component.memoizedElement = element;
-
-        return element;
+        return Component(props);
     }
 
     return memoizedComponent;
@@ -318,11 +323,37 @@ function shallowEqual(objA, objB) {
     return true;
 }
 
+function useMemo(factory, deps) {
+    const oldHook =
+        wipFiber.alternate &&
+        wipFiber.alternate.hooks &&
+        wipFiber.alternate.hooks[hookIndex];
+
+    const hook = {
+        memoizedState: oldHook ? oldHook.memoizedState : factory(),
+        deps,
+    };
+
+    if (oldHook) {
+        const oldDeps = oldHook.deps;
+        if (deps.every((dep, i) => dep === oldDeps[i])) {
+            hook.memoizedState = oldHook.memoizedState;
+        } else {
+            hook.memoizedState = factory();
+        }
+    }
+
+    wipFiber.hooks.push(hook);
+    hookIndex++;
+    return hook.memoizedState;
+}
+
 const myReact = {
     createElement,
     render,
     useState,
     memo,
+    useMemo,
 };
 
 export default myReact;

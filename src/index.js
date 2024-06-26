@@ -46,24 +46,48 @@ const MemoizedGreeting = myReact.memo(Greeting, (prevProps, nextProps) => {
     return prevProps.name === nextProps.name;
 });
 
+function MemoizedCalculator({ value }) {
+    const result = myReact.useMemo(() => {
+        console.log("Calculating...");
+        return value * value;
+    }, [value]);
+
+    return <div>Result: {result}</div>;
+}
+
 function App() {
     const [name, setName] = myReact.useState("");
     const [address, setAddress] = myReact.useState("");
+    const [count, setCount] = myReact.useState(0);
+
+    const handleInputChange = (event) => {
+        setCount(Number(event.target.value));
+    };
 
     return (
         <div>
-            <label>
-                Name{": "}
-                <input value={name} onChange={(e) => setName(e.target.value)} />
-            </label>
-            <label>
-                Address{": "}
-                <input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                />
-            </label>
-            <MemoizedGreeting name={name} />
+            <div>
+                <label>
+                    Name{": "}
+                    <input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                    />
+                </label>
+                <label>
+                    Address{": "}
+                    <input
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                    />
+                </label>
+            </div>
+            {/* <h1>
+                3 + {value} = {result}
+            </h1> */}
+            <input type="number" value={count} onChange={handleInputChange} />
+            <MemoizedCalculator value={count} />
+            {/* <MemoizedGreeting name={name} /> */}
         </div>
     );
 }
