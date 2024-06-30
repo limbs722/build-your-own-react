@@ -206,6 +206,13 @@ function useState(initial) {
     return [hook.state, setState];
 }
 
+async function Foo(props, self) {
+    useState(self); // hookIndex = 0
+    // this.setState()
+
+    return <h1>Hi</h1>;
+}
+
 function updateHostComponent(fiber) {
     if (!fiber.dom) {
         fiber.dom = createDom(fiber);
@@ -272,16 +279,13 @@ function reconcileChildren(wipFiber, elements) {
 //     <Card x={1} />
 //     <Card x={2}/>
 // </div>
-function memo(Component, arePropsEqual) {
+
+function memo(Component, arePropsEqual = shallowEqual) {
     // 동일한 props가 전달될 경우 렌더링 하지 않고 건너뜀
-    // <Card />
     function memoizedComponent(props) {
         const oldProps = wipFiber.alternate && wipFiber.alternate.props;
-        if (
-            oldProps && arePropsEqual
-                ? arePropsEqual(oldProps, props)
-                : shallowEqual(oldProps, props)
-        ) {
+
+        if (oldProps && arePropsEqual(oldProps, props)) {
             return oldProps.child;
         }
         return Component(props);
@@ -324,26 +328,17 @@ function shallowEqual(objA, objB) {
 }
 
 function useMemo(factory, deps) {
-    const oldHook =
-        wipFiber.alternate &&
-        wipFiber.alternate.hooks &&
-        wipFiber.alternate.hooks[hookIndex];
+    const oldHook = wipFiber.alternate.hooks[hookIndex];
 
-    const hook = {
-        memoizedState: oldHook ? oldHook.memoizedState : factory(),
+    const memoizedState =
+        oldHook?.deps.length === deps.length &&
+        oldHook?.deps.every((dep, i) => dep === deps[i])
+            ? oldHook.memoizedState
+            : factory();
+    wipFiber.hooks.push({
+        memoizedState,
         deps,
-    };
-
-    if (oldHook) {
-        const oldDeps = oldHook.deps;
-        if (deps.every((dep, i) => dep === oldDeps[i])) {
-            hook.memoizedState = oldHook.memoizedState;
-        } else {
-            hook.memoizedState = factory();
-        }
-    }
-
-    wipFiber.hooks.push(hook);
+    });
     hookIndex++;
     return hook.memoizedState;
 }

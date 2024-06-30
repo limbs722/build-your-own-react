@@ -59,14 +59,24 @@ function App() {
     const [name, setName] = myReact.useState("");
     const [address, setAddress] = myReact.useState("");
     const [count, setCount] = myReact.useState(0);
+    const [count2, setCount2] = myReact.useState(0);
 
     const handleInputChange = (event) => {
         setCount(Number(event.target.value));
     };
 
+    const handleInputChange2 = (event) => {
+        setCount2(Number(event.target.value));
+    };
+
+    const Card = myReact.memo(({ x }) => {
+        console.log(`Card rendered with x: ${x}`);
+        return <div>Value: {x}</div>;
+    });
+
     return (
         <div>
-            <div>
+            {/* <div>
                 <label>
                     Name{": "}
                     <input
@@ -81,13 +91,16 @@ function App() {
                         onChange={(e) => setAddress(e.target.value)}
                     />
                 </label>
-            </div>
-            {/* <h1>
-                3 + {value} = {result}
-            </h1> */}
-            <input type="number" value={count} onChange={handleInputChange} />
-            <MemoizedCalculator value={count} />
-            {/* <MemoizedGreeting name={name} /> */}
+            </div> */}
+            <Card x={1} />
+            <Card />
+
+            {/* <input type="number" value={count} onChange={handleInputChange} />
+            <input type="number" value={count2} onChange={handleInputChange2} /> */}
+            {/* <MemoizedCalculator value={count} />
+            <MemoizedCalculator value={count2} /> */}
+            {/* <MemoizedGreeting name={name} />
+            <MemoizedGreeting name={name} /> */}
         </div>
     );
 }
