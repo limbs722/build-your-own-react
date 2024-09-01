@@ -335,12 +335,13 @@ function useMemo(factory, deps) {
         oldHook?.deps.every((dep, i) => dep === deps[i])
             ? oldHook.memoizedState
             : factory();
+
     wipFiber.hooks.push({
         memoizedState,
         deps,
     });
     hookIndex++;
-    return hook.memoizedState;
+    return memoizedState;
 }
 
 const myReact = {
